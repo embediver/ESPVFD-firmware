@@ -24,13 +24,13 @@ fn main() {
     let spi = perip.spi2;
     let sclk = perip.pins.gpio3;
     let data = perip.pins.gpio5;
-    let cs = perip.pins.gpio8;
+    let cs = PinDriver::output(perip.pins.gpio8).unwrap();
 
     let n_rst = PinDriver::output(perip.pins.gpio4).unwrap();
     let n_vdon = PinDriver::output(perip.pins.gpio10).unwrap();
 
     let spi_conf = Config::default()
-        .baudrate(3.MHz().into())
+        .baudrate(1.MHz().into())
         .bit_order(BitOrder::LsbFirst)
         .data_mode(MODE_3);
 
@@ -39,7 +39,7 @@ fn main() {
         sclk,
         data,
         Option::<AnyIOPin>::None,
-        Some(cs),
+        Option::<AnyIOPin>::None,
         &DriverConfig::default(),
         &spi_conf,
     )
@@ -47,12 +47,13 @@ fn main() {
 
     let delay = Delay;
 
-    let mut vfd = HCS12SS59T::new(spi, n_rst, delay, Some(n_vdon));
+    let mut vfd = HCS12SS59T::new(spi, n_rst, delay, Some(n_vdon), cs);
 
     vfd.init().unwrap();
     vfd.display("Hello World!").unwrap();
     info!("Should display \"Hello World!\" now.");
     loop {
-        Delay::delay_ms(20);
+        Delay::delay_ms(500);
+        vfd.display("Hello World!").unwrap();
     }
 }
