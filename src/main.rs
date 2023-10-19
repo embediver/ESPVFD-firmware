@@ -1,4 +1,5 @@
 use std::sync::mpsc::{channel, Sender};
+use std::time::Duration;
 
 use embedded_hal::spi::MODE_3;
 use embedded_svc::mqtt::client::Event;
@@ -16,7 +17,8 @@ use esp_idf_svc::mqtt::client::{EspMqttClient, EspMqttMessage, MqttClientConfigu
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::wifi::EspWifi;
 use esp_idf_sys as _; // If using the `binstart` feature of `esp-idf-sys`, always keep this module imported
-use hcs_12ss59t::HCS12SS59T;
+use hcs_12ss59t::{animation::mode, animation::ScrollingText, HCS12SS59T};
+
 use log::*;
 
 type VFD<'a> = HCS12SS59T<
@@ -74,7 +76,7 @@ fn main() -> anyhow::Result<()> {
     let mut vfd = HCS12SS59T::new(spi, n_rst, delay, Some(n_vdon), cs);
 
     vfd.init().unwrap();
-    vfd.display("Hello World!").unwrap();
+    vfd.display("Hello World!".chars()).unwrap();
 
     // WIFI
     let mut wifi = EspWifi::new(perip.modem, sys_loop.clone(), Some(nvs))?;
@@ -101,10 +103,20 @@ fn main() -> anyhow::Result<()> {
     info!("MQTT initialized");
 
     info!("Should display \"DisplayReady\" now.");
-    vfd.display("DisplayReady").unwrap();
+    vfd.display("DisplayReady".chars()).unwrap();
+    let mut text = String::new();
+    let mut scroller = ScrollingText::new(&text, mode::Cycle);
     loop {
-        let text = rx.recv()?;
-        vfd.display(&text).unwrap();
+        if let Ok(t) = rx.recv_timeout(Duration::from_millis(500)) {
+            if t == text {
+                continue;
+            }
+            scroller.destroy();
+            text.clear();
+            text.push_str(&t);
+            scroller = ScrollingText::new(&text, mode::Cycle);
+        }
+        vfd.display(scroller.get_next()).unwrap();
     }
 }
 
@@ -120,11 +132,22 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut VFD<'_>) -> anyhow::Resul
     wifi.set_configuration(&wifi_configuration)?;
 
     let mut load_i: usize = 0;
+    wifi.stop()?; // Try to stop WiFi first to ensure its in a clean state
+    while wifi.is_started()? {
+        let mut s = "OOOOOOOOOOOO".to_owned();
+        s.replace_range(load_i..load_i + 1, "*");
+        vfd.display(s.chars()).unwrap();
+        Delay::delay_ms(200);
+        load_i += 1;
+        load_i = load_i % 12;
+        // vfd.display("080808080808").unwrap();
+        // Delay::delay_ms(500);
+    }
     wifi.start()?;
     while !wifi.is_started()? {
         let mut s = "OOOOOOOOOOOO".to_owned();
         s.replace_range(load_i..load_i + 1, "*");
-        vfd.display(&s).unwrap();
+        vfd.display(s.chars()).unwrap();
         Delay::delay_ms(200);
         load_i += 1;
         load_i = load_i % 12;
@@ -137,7 +160,7 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut VFD<'_>) -> anyhow::Resul
     while !wifi.is_connected()? {
         let mut s = "OOOOOOOOOOOO".to_owned();
         s.replace_range(load_i..load_i + 1, "*");
-        vfd.display(&s).unwrap();
+        vfd.display(s.chars()).unwrap();
         Delay::delay_ms(200);
         load_i += 1;
         load_i = load_i % 12;
@@ -148,13 +171,13 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut VFD<'_>) -> anyhow::Resul
     while !wifi.is_up()? {
         let mut s = "OOOOOOOOOOOO".to_owned();
         s.replace_range(load_i..load_i + 1, "*");
-        vfd.display(&s).unwrap();
+        vfd.display(s.chars()).unwrap();
         Delay::delay_ms(200);
         load_i += 1;
         load_i = load_i % 12;
     }
     info!("Wifi netif up");
-    vfd.display("connected   ").unwrap();
+    vfd.display("connected   ".chars()).unwrap();
     Delay::delay_ms(1000);
 
     Ok(())
