@@ -105,16 +105,15 @@ fn main() -> anyhow::Result<()> {
     info!("Should display \"DisplayReady\" now.");
     vfd.display("DisplayReady".chars()).unwrap();
     let mut text = String::new();
-    let mut scroller = ScrollingText::new(&text, mode::Cycle);
+    let mut scroller = ScrollingText::new(&text, false, mode::Cycle);
     loop {
         if let Ok(t) = rx.recv_timeout(Duration::from_millis(500)) {
             if t == text {
                 continue;
             }
-            scroller.destroy();
             text.clear();
             text.push_str(&t);
-            scroller = ScrollingText::new(&text, mode::Cycle);
+            scroller = ScrollingText::new(&text, false, mode::Cycle);
         }
         vfd.display(scroller.get_next()).unwrap();
     }
