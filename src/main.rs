@@ -76,7 +76,7 @@ fn main() -> anyhow::Result<()> {
     let mut vfd = HCS12SS59T::new(spi, n_rst, delay, Some(n_vdon), cs);
 
     vfd.init().unwrap();
-    vfd.display("Hello World!".chars()).unwrap();
+    vfd.display("Initializing".chars()).unwrap();
 
     // WIFI
     let mut wifi = EspWifi::new(perip.modem, sys_loop.clone(), Some(nvs))?;
@@ -101,9 +101,8 @@ fn main() -> anyhow::Result<()> {
     .unwrap();
     mqtt_client.subscribe("vfd/set-text", embedded_svc::mqtt::client::QoS::AtMostOnce)?;
     info!("MQTT initialized");
+    vfd.vd_off().unwrap();
 
-    info!("Should display \"DisplayReady\" now.");
-    vfd.display("DisplayReady".chars()).unwrap();
     let mut text = String::new();
     let mut scroller = ScrollingText::new(&text, false, mode::Cycle);
     loop {
@@ -111,8 +110,15 @@ fn main() -> anyhow::Result<()> {
             if t == text {
                 continue;
             }
+            if t.chars().all(|c| matches!(c, '.' | ',' | ' ')) {
+                // if all chars are matching one of whitespace chars, turn off display
+                vfd.vd_off().unwrap();
+            } else {
+                vfd.vd_on().unwrap();
+            }
             text.clear();
             text.push_str(&t);
+            text.extend(core::iter::repeat('.').take(12 - t.len()));
             scroller = ScrollingText::new(&text, false, mode::Cycle);
         }
         vfd.display(scroller.get_next()).unwrap();
