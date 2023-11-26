@@ -21,7 +21,7 @@ use hcs_12ss59t::{animation::mode, animation::ScrollingText, HCS12SS59T};
 
 use log::*;
 
-type VFD<'a> = HCS12SS59T<
+type Vfd<'a> = HCS12SS59T<
     SpiDeviceDriver<'a, SpiDriver<'a>>,
     PinDriver<'a, Gpio4, Output>,
     PinDriver<'a, Gpio10, Output>,
@@ -118,14 +118,16 @@ fn main() -> anyhow::Result<()> {
             }
             text.clear();
             text.push_str(&t);
-            text.extend(core::iter::repeat('.').take(12 - t.len()));
+            if t.len() < 12 {
+                text.extend(core::iter::repeat('.').take(12 - t.len()));
+            }
             scroller = ScrollingText::new(&text, false, mode::Cycle);
         }
         vfd.display(scroller.get_next()).unwrap();
     }
 }
 
-fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut VFD<'_>) -> anyhow::Result<()> {
+fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut Vfd<'_>) -> anyhow::Result<()> {
     let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
         ssid: WIFI_SSID.into(),
         bssid: None,
@@ -144,7 +146,7 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut VFD<'_>) -> anyhow::Resul
         vfd.display(s.chars()).unwrap();
         Delay::delay_ms(200);
         load_i += 1;
-        load_i = load_i % 12;
+        load_i %= 12;
         // vfd.display("080808080808").unwrap();
         // Delay::delay_ms(500);
     }
@@ -155,7 +157,7 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut VFD<'_>) -> anyhow::Resul
         vfd.display(s.chars()).unwrap();
         Delay::delay_ms(200);
         load_i += 1;
-        load_i = load_i % 12;
+        load_i %= 12;
         // vfd.display("080808080808").unwrap();
         // Delay::delay_ms(500);
     }
@@ -168,7 +170,7 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut VFD<'_>) -> anyhow::Resul
         vfd.display(s.chars()).unwrap();
         Delay::delay_ms(200);
         load_i += 1;
-        load_i = load_i % 12;
+        load_i %= 12;
     }
     info!("Wifi connected");
 
@@ -179,7 +181,7 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut VFD<'_>) -> anyhow::Resul
         vfd.display(s.chars()).unwrap();
         Delay::delay_ms(200);
         load_i += 1;
-        load_i = load_i % 12;
+        load_i %= 12;
     }
     info!("Wifi netif up");
     vfd.display("connected   ".chars()).unwrap();
