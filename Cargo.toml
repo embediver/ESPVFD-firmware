@@ -34,7 +34,7 @@ esp-idf-hal = { version = "0.41", optional = true, default-features = false }
 esp-idf-svc = { version = "0.46", optional = true, default-features = false }
 embedded-svc = { version = "0.25", optional = true, default-features = false }
 embedded-hal = "1.0.0-alpha.10"
-hcs-12ss59t = { path = "../rs-lib/hcs-12ss59t-rs"}
+hcs-12ss59t = { git = "https://github.com/MG-96/hcs-12ss59t-rs"}
 anyhow = "1.0.75"
 
 [build-dependencies]

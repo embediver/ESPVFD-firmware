@@ -31,7 +31,8 @@ type Vfd<'a> = HCS12SS59T<
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASS: &str = env!("WIFI_PASS");
-const MQTT_URI: &str = "mqtt://192.168.77.5";
+// const MQTT_URI: &str = "mqtt://mqtt.42volt.de";
+const MQTT_URI: &str = env!("MQTT_URI");
 
 fn main() -> anyhow::Result<()> {
     // It is necessary to call this function once. Otherwise some patches to the runtime
