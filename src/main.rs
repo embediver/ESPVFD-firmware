@@ -72,7 +72,7 @@ fn main() -> anyhow::Result<()> {
     )
     .unwrap();
 
-    let delay = Delay;
+    let delay = Delay::new_default();
 
     let mut vfd = HCS12SS59T::new(spi, n_rst, delay, Some(n_vdon), cs);
 
@@ -129,6 +129,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut Vfd<'_>) -> anyhow::Result<()> {
+    let delay = Delay::new_default();
     let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
         ssid: WIFI_SSID.into(),
         bssid: None,
@@ -145,7 +146,7 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut Vfd<'_>) -> anyhow::Resul
         let mut s = "OOOOOOOOOOOO".to_owned();
         s.replace_range(load_i..load_i + 1, "*");
         vfd.display(s.chars()).unwrap();
-        Delay::delay_ms(200);
+        delay.delay_ms(200);
         load_i += 1;
         load_i %= 12;
         // vfd.display("080808080808").unwrap();
@@ -156,7 +157,7 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut Vfd<'_>) -> anyhow::Resul
         let mut s = "OOOOOOOOOOOO".to_owned();
         s.replace_range(load_i..load_i + 1, "*");
         vfd.display(s.chars()).unwrap();
-        Delay::delay_ms(200);
+        delay.delay_ms(200);
         load_i += 1;
         load_i %= 12;
         // vfd.display("080808080808").unwrap();
@@ -169,7 +170,7 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut Vfd<'_>) -> anyhow::Resul
         let mut s = "OOOOOOOOOOOO".to_owned();
         s.replace_range(load_i..load_i + 1, "*");
         vfd.display(s.chars()).unwrap();
-        Delay::delay_ms(200);
+        delay.delay_ms(200);
         load_i += 1;
         load_i %= 12;
     }
@@ -180,13 +181,13 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut Vfd<'_>) -> anyhow::Resul
         let mut s = "OOOOOOOOOOOO".to_owned();
         s.replace_range(load_i..load_i + 1, "*");
         vfd.display(s.chars()).unwrap();
-        Delay::delay_ms(200);
+        delay.delay_ms(200);
         load_i += 1;
         load_i %= 12;
     }
     info!("Wifi netif up");
     vfd.display("connected   ".chars()).unwrap();
-    Delay::delay_ms(1000);
+    delay.delay_ms(1000);
 
     Ok(())
 }
