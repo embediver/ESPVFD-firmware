@@ -85,6 +85,17 @@ fn main() -> anyhow::Result<()> {
     connect_wifi(&mut wifi, &mut vfd)?;
     info!("Wifi connected");
 
+    // Get and display MAC
+    let mac = wifi.get_mac(esp_idf_svc::wifi::WifiDeviceId::Sta)?;
+    let device_id = format!("{:02X}{:02X}{:02X}", mac[3], mac[4], mac[5]);
+    info!("Device ID: {}", device_id);
+    {
+        let delay = Delay::new_default();
+        let text = format!("ID {}", device_id);
+        vfd.display(text.chars()).unwrap();
+        delay.delay_ms(5000);
+    }
+
     // MQTT
     let (tx, rx) = channel();
 
@@ -100,7 +111,14 @@ fn main() -> anyhow::Result<()> {
         }
     })
     .unwrap();
-    mqtt_client.subscribe("vfd/set-text", embedded_svc::mqtt::client::QoS::AtMostOnce)?;
+
+    let main_topic = format!("vfd-{}/", device_id);
+    mqtt_client.subscribe(
+        &format!("{}set-text", main_topic),
+        embedded_svc::mqtt::client::QoS::AtMostOnce,
+    )?;
+    info!("MQTT: subscribed to {}set-text", main_topic);
+
     info!("MQTT initialized");
     vfd.vd_off().unwrap();
 
@@ -193,16 +211,12 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut Vfd<'_>) -> anyhow::Resul
 }
 
 fn handle_mqtt_message(message: &EspMqttMessage, tx: &Sender<String>) -> anyhow::Result<()> {
-    match message.topic() {
-        Some("vfd/set-text") => {
+    if let Some(topic) = message.topic() {
+        if topic.contains("set-text") {
             let buf = message.data();
             let s = String::from_utf8_lossy(buf);
             tx.send(s.into_owned())?;
-            Ok(())
-        }
-        _ => {
-            // not of interest
-            Ok(())
         }
     }
+    Ok(())
 }
