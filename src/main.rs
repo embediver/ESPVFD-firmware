@@ -5,7 +5,7 @@ use embedded_hal::spi::MODE_3;
 use embedded_svc::mqtt::client::Event;
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
 use esp_idf_hal::delay::Delay;
-use esp_idf_hal::gpio::{AnyIOPin, Gpio10, Gpio4, Gpio8, Output, PinDriver};
+use esp_idf_hal::gpio::{AnyIOPin, Gpio2, Gpio4, Gpio5, Output, PinDriver};
 use esp_idf_hal::spi::SpiDriver;
 use esp_idf_hal::spi::{
     config::{BitOrder, Config, DriverConfig},
@@ -24,9 +24,9 @@ use log::*;
 type Vfd<'a> = HCS12SS59T<
     SpiDeviceDriver<'a, SpiDriver<'a>>,
     PinDriver<'a, Gpio4, Output>,
-    PinDriver<'a, Gpio10, Output>,
+    PinDriver<'a, Gpio2, Output>,
     Delay,
-    PinDriver<'a, Gpio8, Output>,
+    PinDriver<'a, Gpio5, Output>,
 >;
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
@@ -49,12 +49,12 @@ fn main() -> anyhow::Result<()> {
     let nvs = EspDefaultNvsPartition::take()?;
 
     let spi = perip.spi2;
-    let sclk = perip.pins.gpio3;
-    let data = perip.pins.gpio5;
-    let cs = PinDriver::output(perip.pins.gpio8).unwrap();
+    let sclk = perip.pins.gpio6;
+    let data = perip.pins.gpio7;
+    let cs = PinDriver::output(perip.pins.gpio5).unwrap();
 
     let n_rst = PinDriver::output(perip.pins.gpio4).unwrap();
-    let n_vdon = PinDriver::output(perip.pins.gpio10).unwrap();
+    let n_vdon = PinDriver::output(perip.pins.gpio2).unwrap();
 
     let spi_conf = Config::default()
         .baudrate(1.MHz().into())
