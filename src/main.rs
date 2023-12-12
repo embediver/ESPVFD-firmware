@@ -21,6 +21,7 @@ use hcs_12ss59t::{animation::mode, animation::ScrollingText, HCS12SS59T};
 
 use log::*;
 
+// Type to easy pass our concrete VFD imlementation around
 type Vfd<'a> = HCS12SS59T<
     SpiDeviceDriver<'a, SpiDriver<'a>>,
     PinDriver<'a, Gpio4, Output>,
@@ -41,13 +42,15 @@ fn main() -> anyhow::Result<()> {
     // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();
 
-    info!("Hello, world!");
+    info!("Initializing...");
 
+    // First get some peripheral access
     let perip = esp_idf_hal::peripherals::Peripherals::take().unwrap();
 
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
 
+    // set up SPI for the VFD
     let spi = perip.spi2;
     let sclk = perip.pins.gpio3;
     let data = perip.pins.gpio5;
@@ -74,6 +77,7 @@ fn main() -> anyhow::Result<()> {
 
     let delay = Delay::new_default();
 
+    // Initialize the VFD
     let mut vfd = HCS12SS59T::new(spi, n_rst, delay, Some(n_vdon), cs);
 
     vfd.init().unwrap();
@@ -90,7 +94,6 @@ fn main() -> anyhow::Result<()> {
     let device_id = format!("{:02X}{:02X}{:02X}", mac[3], mac[4], mac[5]);
     info!("Device ID: {}", device_id);
     {
-        let delay = Delay::new_default();
         let text = format!("ID {}", device_id);
         vfd.display(text.chars()).unwrap();
         delay.delay_ms(5000);
@@ -102,12 +105,10 @@ fn main() -> anyhow::Result<()> {
     let conf = MqttClientConfiguration::default();
     let mut mqtt_client = EspMqttClient::new(MQTT_URI, &conf, move |message| {
         info!("{:?}", message);
-        match message {
-            Ok(Event::Received(m)) => match handle_mqtt_message(m, &tx) {
-                Err(e) => info!("Error handling mqtt message: {e:?}"),
-                _ => {}
-            },
-            _ => {}
+        if let Ok(Event::Received(m)) = message {
+            if let Err(e) = handle_mqtt_message(m, &tx) {
+                info!("Error handling mqtt message: {e:?}");
+            }
         }
     })
     .unwrap();
@@ -118,8 +119,9 @@ fn main() -> anyhow::Result<()> {
         embedded_svc::mqtt::client::QoS::AtMostOnce,
     )?;
     info!("MQTT: subscribed to {}set-text", main_topic);
-
     info!("MQTT initialized");
+
+    // Initialization done turn off display and continue with main loop
     vfd.vd_off().unwrap();
 
     let mut text = String::new();
@@ -161,53 +163,38 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut Vfd<'_>) -> anyhow::Resul
     let mut load_i: usize = 0;
     wifi.stop()?; // Try to stop WiFi first to ensure its in a clean state
     while wifi.is_started()? {
-        let mut s = "OOOOOOOOOOOO".to_owned();
-        s.replace_range(load_i..load_i + 1, "*");
-        vfd.display(s.chars()).unwrap();
-        delay.delay_ms(200);
-        load_i += 1;
-        load_i %= 12;
-        // vfd.display("080808080808").unwrap();
-        // Delay::delay_ms(500);
+        loading_animation(&mut load_i, vfd, &delay);
     }
     wifi.start()?;
     while !wifi.is_started()? {
-        let mut s = "OOOOOOOOOOOO".to_owned();
-        s.replace_range(load_i..load_i + 1, "*");
-        vfd.display(s.chars()).unwrap();
-        delay.delay_ms(200);
-        load_i += 1;
-        load_i %= 12;
-        // vfd.display("080808080808").unwrap();
-        // Delay::delay_ms(500);
+        loading_animation(&mut load_i, vfd, &delay);
     }
     info!("Wifi started");
 
     wifi.connect()?;
     while !wifi.is_connected()? {
-        let mut s = "OOOOOOOOOOOO".to_owned();
-        s.replace_range(load_i..load_i + 1, "*");
-        vfd.display(s.chars()).unwrap();
-        delay.delay_ms(200);
-        load_i += 1;
-        load_i %= 12;
+        loading_animation(&mut load_i, vfd, &delay);
     }
     info!("Wifi connected");
 
     // wifi.wait_netif_up()?;
     while !wifi.is_up()? {
-        let mut s = "OOOOOOOOOOOO".to_owned();
-        s.replace_range(load_i..load_i + 1, "*");
-        vfd.display(s.chars()).unwrap();
-        delay.delay_ms(200);
-        load_i += 1;
-        load_i %= 12;
+        loading_animation(&mut load_i, vfd, &delay);
     }
     info!("Wifi netif up");
     vfd.display("connected   ".chars()).unwrap();
     delay.delay_ms(1000);
 
     Ok(())
+}
+
+fn loading_animation(i: &mut usize, vfd: &mut Vfd<'_>, delay: &Delay) {
+    let mut s = "OOOOOOOOOOOO".to_owned();
+    s.replace_range(*i..*i + 1, "*");
+    vfd.display(s.chars()).unwrap();
+    delay.delay_ms(200);
+    *i += 1;
+    *i %= 12;
 }
 
 fn handle_mqtt_message(message: &EspMqttMessage, tx: &Sender<String>) -> anyhow::Result<()> {
