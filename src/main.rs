@@ -33,7 +33,9 @@ type Vfd<'a> = HCS12SS59T<
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASS: &str = env!("WIFI_PASS");
 // const MQTT_URI: &str = "mqtt://mqtt.42volt.de";
-const MQTT_URI: &str = env!("MQTT_URI");
+const MQTT_URI: Option<&str> = option_env!("MQTT_URI");
+const MQTT_USER: Option<&str> = option_env!("MQTT_USER");
+const MQTT_PASS: Option<&str> = option_env!("MQTT_PASS");
 
 fn main() -> anyhow::Result<()> {
     // It is necessary to call this function once. Otherwise some patches to the runtime
@@ -102,8 +104,11 @@ fn main() -> anyhow::Result<()> {
     // MQTT
     let (tx, rx) = channel();
 
-    let conf = MqttClientConfiguration::default();
-    let mut mqtt_client = EspMqttClient::new(MQTT_URI, &conf, move |message| {
+    let mut conf = MqttClientConfiguration::default();
+    conf.username = MQTT_USER;
+    conf.password = MQTT_PASS;
+    let mqtt_uri = MQTT_URI.unwrap_or("mqtt://mqtt.skynt.de");
+    let mut mqtt_client = EspMqttClient::new(mqtt_uri, &conf, move |message| {
         info!("{:?}", message);
         if let Ok(Event::Received(m)) = message {
             if let Err(e) = handle_mqtt_message(m, &tx) {
