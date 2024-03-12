@@ -1,22 +1,23 @@
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Sender};
+use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::anyhow;
 use embedded_hal::spi::MODE_3;
-use embedded_svc::mqtt::client::Event;
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
-use esp_idf_hal::delay::Delay;
-use esp_idf_hal::gpio::{AnyIOPin, Gpio10, Gpio4, Gpio8, Output, PinDriver};
-use esp_idf_hal::spi::SpiDriver;
-use esp_idf_hal::spi::{
+use esp_idf_svc::eventloop::EspSystemEventLoop;
+use esp_idf_svc::hal::delay::Delay;
+use esp_idf_svc::hal::gpio::{AnyIOPin, Gpio10, Gpio4, Gpio8, Output, PinDriver};
+use esp_idf_svc::hal::spi::SpiDriver;
+use esp_idf_svc::hal::spi::{
     config::{BitOrder, Config, DriverConfig},
     SpiDeviceDriver,
 };
-use esp_idf_hal::units::FromValueType;
-use esp_idf_svc::eventloop::EspSystemEventLoop;
-use esp_idf_svc::mqtt::client::{EspMqttClient, EspMqttMessage, MqttClientConfiguration};
+use esp_idf_svc::hal::units::FromValueType;
+use esp_idf_svc::mqtt::client::{EspMqttClient, MqttClientConfiguration};
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::wifi::EspWifi;
-use esp_idf_sys as _; // If using the `binstart` feature of `esp-idf-sys`, always keep this module imported
 use hcs_12ss59t::{animation::mode, animation::ScrollingText, HCS12SS59T};
 
 use log::*;
@@ -37,17 +38,22 @@ const MQTT_URI: Option<&str> = option_env!("MQTT_URI");
 const MQTT_USER: Option<&str> = option_env!("MQTT_USER");
 const MQTT_PASS: Option<&str> = option_env!("MQTT_PASS");
 
-fn main() -> anyhow::Result<()> {
+fn main() -> ! {
+    app().unwrap();
+    unreachable!()
+}
+
+fn app() -> anyhow::Result<()> {
     // It is necessary to call this function once. Otherwise some patches to the runtime
     // implemented by esp-idf-sys might not link properly. See https://github.com/esp-rs/esp-idf-template/issues/71
-    esp_idf_sys::link_patches();
+    esp_idf_svc::sys::link_patches();
     // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();
 
     info!("Initializing...");
 
     // First get some peripheral access
-    let perip = esp_idf_hal::peripherals::Peripherals::take().unwrap();
+    let perip = esp_idf_svc::hal::peripherals::Peripherals::take().unwrap();
 
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
@@ -103,17 +109,31 @@ fn main() -> anyhow::Result<()> {
 
     // MQTT
     let (tx, rx) = channel();
+    let mqtt_crashed = Arc::new(AtomicBool::new(false));
+    let mqtt_crash_notifier = mqtt_crashed.clone();
 
-    let mut conf = MqttClientConfiguration::default();
-    conf.username = MQTT_USER;
-    conf.password = MQTT_PASS;
+    let conf = MqttClientConfiguration {
+        username: MQTT_USER,
+        password: MQTT_PASS,
+        ..Default::default()
+    };
     let mqtt_uri = MQTT_URI.unwrap_or("mqtt://mqtt.skynt.de");
-    let mut mqtt_client = EspMqttClient::new(mqtt_uri, &conf, move |message| {
-        info!("{:?}", message);
-        if let Ok(Event::Received(m)) = message {
-            if let Err(e) = handle_mqtt_message(m, &tx) {
-                info!("Error handling mqtt message: {e:?}");
+    let mut mqtt_client = EspMqttClient::new_cb(mqtt_uri, &conf, move |message| {
+        info!("{:?}", message.payload());
+        match message.payload() {
+            esp_idf_svc::mqtt::client::EventPayload::Received {
+                id: _,
+                topic,
+                data,
+                details: _,
+            } => handle_mqtt_message(topic, data, &tx).unwrap(),
+            esp_idf_svc::mqtt::client::EventPayload::Error(_) => {
+                mqtt_crash_notifier.store(true, std::sync::atomic::Ordering::Relaxed)
             }
+            esp_idf_svc::mqtt::client::EventPayload::Disconnected => {
+                mqtt_crash_notifier.store(true, std::sync::atomic::Ordering::Relaxed)
+            }
+            _ => {}
         }
     })
     .unwrap();
@@ -150,16 +170,19 @@ fn main() -> anyhow::Result<()> {
             scroller = ScrollingText::new(&text, false, mode::Cycle);
         }
         vfd.display(scroller.get_next()).unwrap();
+        if mqtt_crashed.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(anyhow!("Mqtt error/disconnected"));
+        }
     }
 }
 
 fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut Vfd<'_>) -> anyhow::Result<()> {
     let delay = Delay::new_default();
     let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
-        ssid: WIFI_SSID.into(),
+        ssid: WIFI_SSID.try_into().unwrap(),
         bssid: None,
         auth_method: AuthMethod::WPA2Personal,
-        password: WIFI_PASS.into(),
+        password: WIFI_PASS.try_into().unwrap(),
         channel: None,
     });
 
@@ -202,11 +225,14 @@ fn loading_animation(i: &mut usize, vfd: &mut Vfd<'_>, delay: &Delay) {
     *i %= 12;
 }
 
-fn handle_mqtt_message(message: &EspMqttMessage, tx: &Sender<String>) -> anyhow::Result<()> {
-    if let Some(topic) = message.topic() {
+fn handle_mqtt_message(
+    topic: Option<&str>,
+    data: &[u8],
+    tx: &Sender<String>,
+) -> anyhow::Result<()> {
+    if let Some(topic) = topic {
         if topic.contains("set-text") {
-            let buf = message.data();
-            let s = String::from_utf8_lossy(buf);
+            let s = String::from_utf8_lossy(data);
             tx.send(s.into_owned())?;
         }
     }
