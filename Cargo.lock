@@ -775,7 +775,8 @@ checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 [[package]]
 name = "hcs-12ss59t"
 version = "0.1.0"
-source = "git+https://github.com/embediver/hcs-12ss59t-rs#6928d5ce003e0c96574d3fabd586ed91e423e62b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32068bd5ae78e8c7aa94fc1814e9a5e957e18ecc16bf49c42066994f6fb21e20"
 dependencies = [
  "embedded-hal 1.0.0",
 ]
