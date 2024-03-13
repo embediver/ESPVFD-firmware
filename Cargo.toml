@@ -28,7 +28,7 @@ log = { version = "0.4", default-features = false }
 esp-idf-svc = { version = "0.48.1", default-features = false }
 embedded-svc = { version = "0.27", default-features = false }
 embedded-hal = "1"
-hcs-12ss59t = { git = "https://github.com/embediver/hcs-12ss59t-rs"}
+hcs-12ss59t = "0.1.0"
 anyhow = "1.0.75"
 
 [build-dependencies]

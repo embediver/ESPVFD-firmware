@@ -18,6 +18,7 @@ use esp_idf_svc::hal::units::FromValueType;
 use esp_idf_svc::mqtt::client::{EspMqttClient, MqttClientConfiguration};
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::wifi::EspWifi;
+use hcs_12ss59t::FontTable;
 use hcs_12ss59t::{animation::mode, animation::ScrollingText, HCS12SS59T};
 
 use log::*;
@@ -89,7 +90,7 @@ fn app() -> anyhow::Result<()> {
     let mut vfd = HCS12SS59T::new(spi, n_rst, delay, Some(n_vdon), cs);
 
     vfd.init().unwrap();
-    vfd.display("Initializing".chars()).unwrap();
+    vfd.display_str("Initializing").unwrap();
 
     // WIFI
     let mut wifi = EspWifi::new(perip.modem, sys_loop.clone(), Some(nvs))?;
@@ -103,7 +104,7 @@ fn app() -> anyhow::Result<()> {
     info!("Device ID: {}", device_id);
     {
         let text = format!("ID {}", device_id);
-        vfd.display(text.chars()).unwrap();
+        vfd.display_str(&text).unwrap();
         delay.delay_ms(5000);
     }
 
@@ -177,6 +178,8 @@ fn app() -> anyhow::Result<()> {
 }
 
 fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut Vfd<'_>) -> anyhow::Result<()> {
+    set_vfd_cgram0(vfd);
+
     let delay = Delay::new_default();
     let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
         ssid: WIFI_SSID.try_into().unwrap(),
@@ -216,13 +219,17 @@ fn connect_wifi(wifi: &mut EspWifi<'static>, vfd: &mut Vfd<'_>) -> anyhow::Resul
     Ok(())
 }
 
+fn set_vfd_cgram0(vfd: &mut Vfd<'_>) {
+    vfd.set_cgram_pattern(FontTable::Ram0, [0b0111_1000, 0b0100_0100])
+        .unwrap();
+}
 fn loading_animation(i: &mut usize, vfd: &mut Vfd<'_>, delay: &Delay) {
-    let mut s = "OOOOOOOOOOOO".to_owned();
-    s.replace_range(*i..*i + 1, "*");
-    vfd.display(s.chars()).unwrap();
+    *i %= 12;
+    let mut data = [FontTable::Ram0; 12];
+    data[*i] = FontTable::CharO;
+    vfd.display(data).unwrap();
     delay.delay_ms(200);
     *i += 1;
-    *i %= 12;
 }
 
 fn handle_mqtt_message(
