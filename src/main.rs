@@ -35,7 +35,7 @@ type Vfd<'a> = HCS12SS59T<
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASS: &str = env!("WIFI_PASS");
 // const MQTT_URI: &str = "mqtt://mqtt.42volt.de";
-const MQTT_URI: Option<&str> = option_env!("MQTT_URI");
+const MQTT_URI: &str = env!("MQTT_URI");
 const MQTT_USER: Option<&str> = option_env!("MQTT_USER");
 const MQTT_PASS: Option<&str> = option_env!("MQTT_PASS");
 
@@ -118,7 +118,7 @@ fn app() -> anyhow::Result<()> {
         password: MQTT_PASS,
         ..Default::default()
     };
-    let mqtt_uri = MQTT_URI.unwrap_or("mqtt://mqtt.skynt.de");
+    let mqtt_uri = MQTT_URI;
     let mut mqtt_client = EspMqttClient::new_cb(mqtt_uri, &conf, move |message| {
         info!("{:?}", message.payload());
         match message.payload() {
